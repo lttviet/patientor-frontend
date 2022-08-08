@@ -1,14 +1,51 @@
-import { Typography } from "@material-ui/core";
+import { useState } from "react";
+import { Button, Typography } from "@material-ui/core";
 import { useEffect } from "react";
 import axios from "axios";
 import { useParams } from "react-router-dom";
 import { updatePatient, useStateValue } from "../state";
-import { Patient } from "../types";
+import { NewEntry, Patient } from "../types";
 import { apiBaseUrl } from "../constants";
+import EntryDetails from "../components/EntryDetails";
+import AddEntryModal from "../components/AddEntryModel";
 
 const PatientDetailsPage = () => {
   const { id } = useParams<{ id: string }>();
   const [{ patients }, dispatch] = useStateValue();
+  const [patient, setPatient] = useState<Patient>();
+
+  const [modalOpen, setModalOpen] = useState<boolean>(false);
+  const [error, setError] = useState<string>();
+
+  const openModal = (): void => setModalOpen(true);
+
+  const closeModal = (): void => {
+    setModalOpen(false);
+    setError(undefined);
+  };
+
+  const submitNewEntry = async (values: NewEntry) => {
+    if (!id) {
+      return;
+    }
+
+    try {
+      const { data: updatedPatient } = await axios.post<Patient>(
+        `${apiBaseUrl}/patients/${id}/entries`,
+        values
+      );
+      dispatch(updatePatient(updatedPatient));
+      closeModal();
+    } catch (e: unknown) {
+      if (axios.isAxiosError(e)) {
+        console.error(e?.response?.data || "Unrecognized axios error");
+        setError(String(e?.response?.data?.error) || "Unrecognized axios error");
+      } else {
+        console.error("Unknown error", e);
+        setError("Unknown error");
+      }
+    }
+  };
 
   useEffect(() => {
     const fetchPatient = async (id: string) => {
@@ -31,7 +68,13 @@ const PatientDetailsPage = () => {
     }
   }, [dispatch, id]);
 
-  if (!id || !patients[id]) {
+  useEffect(() => {
+    if (id) {
+      setPatient(patients[id]);
+    }
+  }, [id, patients]);
+
+  if (!id || !patient) {
     return (
       <Typography variant='h6'>
         Bad id
@@ -42,14 +85,33 @@ const PatientDetailsPage = () => {
   return (
     <>
       <Typography variant='h4'>
-        {patients[id].name} {patients[id].gender}
+        {patient.name} {patient.gender}
       </Typography>
       <Typography variant='body1'>
-        ssn: {patients[id].ssn}
+        ssn: {patient.ssn}
       </Typography>
       <Typography variant='body1'>
-        occupation: {patients[id].occupation}
+        occupation: {patient.occupation}
       </Typography>
+      <Typography variant='h6'>
+        entries
+      </Typography>
+
+      <div>
+        {patient.entries?.map((entry) => (
+          <EntryDetails key={entry.id} entry={entry} />
+        ))}
+      </div>
+
+      <AddEntryModal
+        modalOpen={modalOpen}
+        onSubmit={submitNewEntry}
+        error={error}
+        onClose={closeModal}
+      />
+      <Button variant="contained" onClick={() => openModal()}>
+        Add New Entry
+      </Button>
     </>
   );
 };
